@@ -1,0 +1,25 @@
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/switchboard:/etc/nginx/switchboard
+    depends_on:
+      - blue
+      - green
+
+  blue:
+    build: ./demo-app
+    environment:
+      APP_VERSION: "1"
+      APP_MESSAGE: "The original release"
+      APP_COLOR: "#2563eb"
+
+  green:
+    build: ./demo-app
+    environment:
+      APP_VERSION: "1"
+      APP_MESSAGE: "The original release"
+      APP_COLOR: "#2563eb"
