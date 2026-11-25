@@ -13,13 +13,15 @@ services:
   blue:
     build: ./demo-app
     environment:
-      APP_VERSION: "1"
-      APP_MESSAGE: "The original release"
-      APP_COLOR: "#2563eb"
+      APP_VERSION: "${BLUE_VERSION:-1}"
+      APP_MESSAGE: "${BLUE_MESSAGE:-The original release}"
+      APP_COLOR: "${BLUE_COLOR:-#2563eb}"
+      BROKEN: "${BLUE_BROKEN:-false}"
 
   green:
     build: ./demo-app
     environment:
-      APP_VERSION: "1"
-      APP_MESSAGE: "The original release"
-      APP_COLOR: "#2563eb"
+      APP_VERSION: "${GREEN_VERSION:-1}"
+      APP_MESSAGE: "${GREEN_MESSAGE:-The original release}"
+      APP_COLOR: "${GREEN_COLOR:-#2563eb}"
+      BROKEN: "${GREEN_BROKEN:-false}"
