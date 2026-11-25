@@ -5,6 +5,7 @@ const VERSION = process.env.APP_VERSION || '1';
 const MESSAGE = process.env.APP_MESSAGE || 'Hello from Switchboard';
 const COLOR = process.env.APP_COLOR || '#2563eb';
 const BROKEN = process.env.BROKEN === 'true';
+const ENV_NAME = process.env.APP_ENV || 'unknown';
 
 const page = () => `<!doctype html>
 <html lang="en">
@@ -31,7 +32,7 @@ const server = http.createServer((req, res) => {
   if (req.url === '/health') {
     const status = BROKEN ? 500 : 200;
     res.writeHead(status, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: BROKEN ? 'unhealthy' : 'ok', version: VERSION }));
+    res.end(JSON.stringify({ status: BROKEN ? 'unhealthy' : 'ok', version: VERSION, env: ENV_NAME }));
     return;
   }
   if (BROKEN) {

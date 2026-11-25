@@ -13,6 +13,7 @@ services:
   blue:
     build: ./demo-app
     environment:
+      APP_ENV: "blue"
       APP_VERSION: "${BLUE_VERSION:-1}"
       APP_MESSAGE: "${BLUE_MESSAGE:-The original release}"
       APP_COLOR: "${BLUE_COLOR:-#2563eb}"
@@ -21,6 +22,7 @@ services:
   green:
     build: ./demo-app
     environment:
+      APP_ENV: "green"
       APP_VERSION: "${GREEN_VERSION:-1}"
       APP_MESSAGE: "${GREEN_MESSAGE:-The original release}"
       APP_COLOR: "${GREEN_COLOR:-#2563eb}"
