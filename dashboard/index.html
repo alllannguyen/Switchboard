@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Switchboard</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f8fafc; --card: #fff; --text: #0f172a; --muted: #64748b;
+            --line: #e2e8f0; --ok: #16a34a; --bad: #dc2626; --accent: #2563eb; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0b1120; --card: #131c31; --text: #e2e8f0; --muted: #94a3b8; --line: #243049; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 1.25rem 2rem; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+    h1 { font-size: 1.25rem; margin: 0; }
+    header a { color: var(--accent); font-size: .9rem; }
+    main { max-width: 960px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5rem; }
+    .envs { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1.25rem; }
+    .card.live { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .card h2 { margin: 0 0 .75rem; font-size: 1rem; display: flex; align-items: center; gap: .5rem; text-transform: capitalize; }
+    .badge { font-size: .7rem; padding: .15rem .5rem; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .badge.live { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .swatch { height: 56px; border-radius: 8px; margin-bottom: .75rem; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 1.5rem; }
+    .row { display: flex; justify-content: space-between; font-size: .9rem; padding: .25rem 0; }
+    .row span:first-child { color: var(--muted); }
+    .health { font-weight: 600; }
+    .health.ok { color: var(--ok); } .health.bad { color: var(--bad); }
+    .actions { display: flex; gap: .75rem; flex-wrap: wrap; }
+    button { font: inherit; padding: .55rem 1rem; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    form { display: grid; grid-template-columns: 1fr 2fr auto; gap: .75rem; align-items: end; }
+    label { display: grid; gap: .25rem; font-size: .8rem; color: var(--muted); }
+    input[type=text] { font: inherit; padding: .5rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+    input[type=color] { width: 100%; height: 38px; padding: 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
+    .check { grid-auto-flow: column; align-items: center; justify-content: start; gap: .5rem; }
+    .form-actions { grid-column: 1 / -1; display: flex; gap: 1rem; align-items: center; }
+    h3 { margin: 0 0 .75rem; font-size: .95rem; }
+    #toast { min-height: 1.4rem; font-size: .9rem; }
+    #toast.err { color: var(--bad); } #toast.ok { color: var(--ok); }
+    ul { list-style: none; margin: 0; padding: 0; font-size: .85rem; }
+    li { display: flex; gap: 1rem; padding: .35rem 0; border-top: 1px solid var(--line); }
+    li time { color: var(--muted); white-space: nowrap; }
+    li b { min-width: 4.5rem; }
+    @media (max-width: 640px) { .envs, form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Switchboard</h1>
+    <a href="http://localhost:8080" target="_blank" rel="noopener">Open live site &#8599;</a>
+  </header>
+  <main>
+    <div class="envs" id="envs"></div>
+
+    <section class="card">
+      <h3>Deploy to <span id="target">inactive</span> environment</h3>
+      <form id="deploy">
+        <label>Version <input type="text" name="version" required pattern="[\w.\-]{1,32}" placeholder="2"></label>
+        <label>Message <input type="text" name="message" maxlength="120" placeholder="What changed in this release?"></label>
+        <label>Color <input type="color" name="color" value="#16a34a"></label>
+        <div class="form-actions">
+          <label class="check"><input type="checkbox" name="broken"> Simulate a broken release</label>
+          <button class="primary" type="submit">Deploy &amp; health-check</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h3>Traffic</h3>
+      <div class="actions">
+        <button class="primary" id="switch">Switch traffic</button>
+        <button id="rollback">Roll back</button>
+      </div>
+      <p id="toast" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h3>History</h3>
+      <ul id="history"></ul>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const other = (e) => (e === 'blue' ? 'green' : 'blue');
+    let state = null;
+    let working = false;
+
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function toast(msg, kind = '') {
+      $('toast').textContent = msg;
+      $('toast').className = kind;
+    }
+
+    function render() {
+      if (!state) return;
+      $('target').textContent = other(state.active);
+      $('envs').innerHTML = ['blue', 'green'].map((env) => {
+        const s = state.envs[env];
+        const h = state.health[env];
+        const live = env === state.active;
+        return `<div class="card ${live ? 'live' : ''}">
+          <h2>${env} <span class="badge ${live ? 'live' : ''}">${live ? 'live' : 'idle'}</span></h2>
+          <div class="swatch" style="background:${esc(s.color)}">v${esc(s.version)}</div>
+          <div class="row"><span>Message</span><span>${esc(s.message)}</span></div>
+          <div class="row"><span>Running</span><span>${h.version ? 'v' + esc(h.version) : '&mdash;'}</span></div>
+          <div class="row"><span>Health</span><span class="health ${h.healthy ? 'ok' : 'bad'}">${h.healthy ? 'healthy' : 'unhealthy'}</span></div>
+        </div>`;
+      }).join('');
+      $('history').innerHTML = state.history.length
+        ? state.history.map((h) => `<li><time>${new Date(h.at).toLocaleTimeString()}</time><b>${esc(h.action)}</b><span>${esc(h.detail)}</span></li>`).join('')
+        : '<li>No activity yet</li>';
+      const idleHealthy = state.health[other(state.active)].healthy;
+      $('switch').disabled = working || !idleHealthy;
+      $('switch').title = idleHealthy ? '' : 'The idle environment is unhealthy';
+      $('rollback').disabled = working || !state.previous;
+    }
+
+    async function call(method, path, body) {
+      const res = await fetch('/api/' + path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    async function refresh() {
+      try { state = await call('GET', 'state'); } catch (e) { toast(e.message, 'err'); }
+      render();
+    }
+
+    async function act(label, fn, success) {
+      working = true; render(); toast(label + '...');
+      try {
+        const result = await fn();
+        toast(success(result), 'ok');
+      } catch (e) {
+        toast(e.message, 'err');
+      }
+      working = false;
+      await refresh();
+    }
+
+    $('deploy').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      const f = new FormData(ev.target);
+      const body = { version: f.get('version'), message: f.get('message'), color: f.get('color'), broken: f.get('broken') === 'on' };
+      act('Deploying to ' + other(state.active), () => call('POST', 'deploy', body),
+        (r) => r.health.healthy ? `Deployed to ${r.target}, health check passed` : `Deployed to ${r.target} but it is UNHEALTHY. Traffic was not touched.`);
+    });
+    $('switch').addEventListener('click', () => act('Switching traffic', () => call('POST', 'switch'), (r) => `Traffic now goes to ${r.active}`));
+    $('rollback').addEventListener('click', () => act('Rolling back', () => call('POST', 'rollback'), (r) => `Rolled back to ${r.active}`));
+
+    refresh();
+    setInterval(() => { if (!working) refresh(); }, 5000);
+  </script>
+</body>
+</html>
